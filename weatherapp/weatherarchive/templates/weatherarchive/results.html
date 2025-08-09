@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Search Results</title>
+</head>
+<body>
+    <h1>Search Results</h1>
+    <p>Choice: {{ choice }}</p>
+    <p>City: {{ city }}</p>
+    <p>Postcode: {{ postcode }}</p>
+    <p>Latitude: {{ latitude }}</p>
+    <p>Longitude: {{ longitude }}</p>
+    <a href="{% url 'location_search' %}">Back</a>
+</body>
+</html>
