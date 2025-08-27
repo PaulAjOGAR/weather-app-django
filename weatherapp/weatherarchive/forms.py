@@ -25,3 +25,6 @@ class LocationForm(forms.Form):
         elif choice == 'manual':
             if not cleaned_data.get('latitude') or not cleaned_data.get('longitude'):
                 self.add_error('latitude', 'Latitude and longitude are required.')
+
+
+class WeatherDailyForm:
