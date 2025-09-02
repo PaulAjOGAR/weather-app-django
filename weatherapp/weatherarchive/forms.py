@@ -30,16 +30,36 @@ class LocationForm(forms.Form):
                 self.add_error('longitude', 'Latitude and longitude are required.')
 
 
+
 class WeatherDailyForm(forms.Form):
     location = forms.CharField(label="Location", max_length=100)
-    start_date = forms.DateField(label="Start Date", widget=forms.SelectDateWidget)
-    end_date = forms.DateField(label="End Date", widget=forms.SelectDateWidget)
+    # Allow selecting years from 1940 through the current year
+    start_date = forms.DateField(
+        label="Start Date",
+        widget=forms.SelectDateWidget(years=range(1940, __import__('datetime').date.today().year + 1))
+    )
+    end_date = forms.DateField(
+        label="End Date",
+        widget=forms.SelectDateWidget(years=range(1940, __import__('datetime').date.today().year + 1))
+    )
 
     def clean(self):
         cleaned_data = super().clean()
         start_date = cleaned_data.get("start_date")
         end_date = cleaned_data.get("end_date")
 
-        if start_date and end_date and start_date > end_date:
-            self.add_error("end_date", "End date must be after start date.")
+        if start_date and end_date:
+            # Enforce lower bound for historical data
+            from datetime import date as _date
+            min_start = _date(1940, 1, 1)
+            if start_date < min_start:
+                self.add_error("start_date", "Start date cannot be earlier than 1940-01-01.")
+            if start_date > end_date:
+                self.add_error("end_date", "End date must be after start date.")
+
         return cleaned_data
+
+
+class WeatherHourlyForm(WeatherDailyForm):
+    """Reuse same fields/validation for hourly queries."""
+    pass

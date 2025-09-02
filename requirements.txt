@@ -1,0 +1,7 @@
+Django>=5.0,<6.0
+requests>=2.31,<3
+pandas>=2.2,<3
+numpy>=1.26,<3
+requests-cache>=1.2,<2
+retry-requests>=2.0,<3
+plotly>=5.22,<6

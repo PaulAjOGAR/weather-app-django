@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Weather Archive{% endblock %}</title>
+  <style>
+    :root{
+      --bg:#0b172a; --card:#111f3a; --muted:#93a4c3; --text:#e8eef9; --accent:#4cc9f0; --accent2:#a1ffce; --danger:#ff6b6b;
+      --table-stripe:#0f2242;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:linear-gradient(180deg,#0a1530, #0b172a 40%, #0a1326 100%);color:var(--text);
+      min-height:100vh;display:flex;flex-direction:column}
+    header{position:sticky;top:0;background:rgba(11,23,42,.85);backdrop-filter:blur(8px);border-bottom:1px solid #1f2d4a;z-index:10}
+    .nav{max-width:1000px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:12px}
+    .logo{width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 30% 30%, #ffe66d, #ff922b 40%, #f76707 70%);
+      box-shadow:0 0 18px rgba(255,146,43,.5)}
+    .brand{font-weight:700;letter-spacing:.3px}
+    main{flex:1;max-width:1000px;width:100%;margin:24px auto;padding:0 20px}
+    .card{background:var(--card);border:1px solid #1f2d4a;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);}
+    .card.pad{padding:18px}
+    h1{margin:0 0 12px 0;font-size:24px}
+    .muted{color:var(--muted);font-size:14px}
+    .grid{display:grid;grid-template-columns:1fr;gap:16px}
+    @media(min-width:860px){.grid{grid-template-columns:1fr 2fr}}
+    form .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    form .row.full{grid-template-columns:1fr}
+    label{font-weight:600;font-size:14px;margin-bottom:6px;display:block}
+    input, select{width:100%;padding:10px 12px;background:#0d1b34;color:var(--text);border:1px solid #233557;border-radius:10px}
+    .actions{display:flex;gap:10px;margin-top:10px}
+    .btn{padding:10px 14px;border-radius:10px;border:1px solid #274b6f;background:linear-gradient(180deg,#1a3a5a,#15324f);color:#e9f2ff;font-weight:600;cursor:pointer}
+    .btn:hover{transform:translateY(-1px);box-shadow:0 8px 16px rgba(0,0,0,.25)}
+    .btn.secondary{background:transparent}
+    .error{color:var(--danger);margin-top:6px}
+    table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:12px}
+    thead th{background:#102447;color:#cfe0ff;text-align:left;padding:10px;border-bottom:1px solid #1f2d4a}
+    tbody tr:nth-child(odd){background:var(--table-stripe)}
+    tbody td{padding:10px;border-bottom:1px solid #1f2d4a}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;border:1px solid #2c3f60;background:#0d1b34}
+    .pill.ok{color:#a7f3d0;border-color:#0ea5a5}
+    .pill.bad{color:#ffd1d1;border-color:#ff6b6b}
+    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:12px 0}
+    @media(max-width:860px){.cards{grid-template-columns:repeat(2,1fr)}}
+    .stat{background:#0d1b34;border:1px solid #233557;border-radius:12px;padding:12px}
+    .stat h4{margin:0 0 6px 0;font-size:13px;color:#b9ccf0}
+    .stat .val{font-weight:800;font-size:18px}
+    /* Plot containers: ensure enough vertical space */
+    .plot{width:100%;min-height:360px}
+    @media(max-width:600px){.plot{min-height:300px}}
+    footer{padding:18px 20px;text-align:center;color:#94a3b8;font-size:13px;border-top:1px solid #1f2d4a}
+  </style>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="nav">
+      <div class="logo" aria-hidden="true"></div>
+      <div class="brand">Weather Archive</div>
+      <div class="muted" style="margin-left:auto">Historic daily & hourly weather data</div>
+    </div>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    Data by Open‑Meteo • This demo app shows 92‑day windows of history
+  </footer>
+</body>
+</html>

@@ -55,6 +55,7 @@ This project targets Windows paths in examples, but it works on macOS/Linux too 
 - If you see an import/URL error: ensure you are using the updated URLs (`/` for form+results, `/download/` for CSV) and that the app is installed.
 - If API calls fail: ensure you have internet access; the app uses Open-Meteo public APIs (no key required). Temporary external failures will surface as user-visible errors.
 - Date validation: Start date must be on or before the end date; adjust the dates if you see validation errors.
+- Range limit: The date range is limited to 92 days to match the original Streamlit app’s constraint.
 - Timezone: The API uses `timezone=auto` for results.
 
 ## Development Commands (reference)
@@ -71,6 +72,39 @@ This project targets Windows paths in examples, but it works on macOS/Linux too 
 - `weatherapp/mysite/` — Project settings and URL routing
 - `weatherapp/weatherarchive/` — App with views, forms, templates, URLs
 - `docs/` — Project tasks and improvement checklist
+
+## Build from GitHub link
+
+You can build and run this app directly after cloning from GitHub.
+
+Windows PowerShell example:
+
+1) Clone the repository
+- `git clone <YOUR_GITHUB_REPO_URL>.git`
+- `cd WeatherApp`
+
+2) Create and activate a virtual environment
+- `python -m venv .venv`
+- `.\.venv\Scripts\Activate.ps1`
+
+3) Install dependencies
+- `pip install -r requirements.txt`
+
+4) Prepare the database and run checks
+- `cd weatherapp`
+- `python manage.py migrate`
+- (optional) `python manage.py check`
+- (optional) `python manage.py test`
+
+5) Run the development server
+- `python manage.py runserver`
+
+6) Open in your browser
+- http://127.0.0.1:8000/
+
+Notes:
+- If using macOS/Linux, adapt the venv activation command accordingly (e.g., `source .venv/bin/activate`).
+- Ensure outbound internet access is available for Open-Meteo API calls.
 
 ## License
 This repository did not include a license. Add one if you plan to distribute it.

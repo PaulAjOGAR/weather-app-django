@@ -1,14 +1,47 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Location Search</title>
-</head>
-<body>
+{% extends 'weatherarchive/base.html' %}
+{% block title %}Find Location • Weather Archive{% endblock %}
+{% block content %}
+<div class="grid">
+  <section class="card pad">
     <h1>Enter Location Details</h1>
+    <p class="muted">Search by city, postcode, or enter coordinates manually.</p>
     <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Search</button>
+      {% csrf_token %}
+      <div class="row full">
+        {{ form.non_field_errors }}
+      </div>
+      <div class="row full">
+        {{ form.input.label_tag }}
+        {{ form.input }}
+      </div>
+      <div class="row">
+        <div>
+          {{ form.city.label_tag }}
+          {{ form.city }}
+          {% if form.city.errors %}<div class="error">{{ form.city.errors.0 }}</div>{% endif %}
+        </div>
+        <div>
+          {{ form.postcode.label_tag }}
+          {{ form.postcode }}
+          {% if form.postcode.errors %}<div class="error">{{ form.postcode.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          {{ form.latitude.label_tag }}
+          {{ form.latitude }}
+          {% if form.latitude.errors %}<div class="error">{{ form.latitude.errors.0 }}</div>{% endif %}
+        </div>
+        <div>
+          {{ form.longitude.label_tag }}
+          {{ form.longitude }}
+          {% if form.longitude.errors %}<div class="error">{{ form.longitude.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" type="submit">Search</button>
+      </div>
     </form>
-</body>
-</html>
+  </section>
+</div>
+{% endblock %}
