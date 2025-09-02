@@ -54,11 +54,15 @@ def geocode(name: str) -> Tuple[Optional[float], Optional[float], Optional[str]]
 
 def fetch_daily(lat: float, lon: float, start: date, end: date) -> Dict:
     """Fetch daily history from Open-Meteo Archive API."""
+    # Include additional aggregates where available: temperature mean, RH mean, wind mean
     daily_params = ",".join([
         "temperature_2m_max",
         "temperature_2m_min",
+        "temperature_2m_mean",
+        "relative_humidity_2m_mean",
         "precipitation_sum",
         "windspeed_10m_max",
+        "windspeed_10m_mean",
     ])
     r = _session.get(
         "https://archive-api.open-meteo.com/v1/archive",
@@ -78,11 +82,14 @@ def fetch_daily(lat: float, lon: float, start: date, end: date) -> Dict:
 
 def fetch_hourly(lat: float, lon: float, start: date, end: date) -> Dict:
     """Fetch hourly history from Open-Meteo Archive API (basic common vars)."""
+    # Include cloud cover and surface pressure if available
     hourly_params = ",".join([
         "temperature_2m",
         "relative_humidity_2m",
         "precipitation",
         "windspeed_10m",
+        "cloudcover",
+        "surface_pressure",
     ])
     r = _session.get(
         "https://archive-api.open-meteo.com/v1/archive",

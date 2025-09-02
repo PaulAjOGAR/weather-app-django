@@ -3,9 +3,11 @@ import io
 from datetime import date
 from django.http import HttpResponse
 from django.shortcuts import render
-from .forms import WeatherDailyForm, WeatherHourlyForm
+from .forms import WeatherDailyForm, WeatherHourlyForm, ContactForm
 from .services.open_meteo import geocode as svc_geocode, fetch_daily as svc_fetch_daily, fetch_hourly as svc_fetch_hourly
 from .utils.analysis import compute_stats, detect_anomalies
+from django.conf import settings
+from django.core.mail import EmailMessage
 
 
 def daily_data(request):
@@ -35,15 +37,25 @@ def daily_data(request):
         dates = daily.get("time") or []
         tmax = daily.get("temperature_2m_max") or []
         tmin = daily.get("temperature_2m_min") or []
+        tmean_api = daily.get("temperature_2m_mean") or []
+        rh_mean = daily.get("relative_humidity_2m_mean") or []
         precip = daily.get("precipitation_sum") or []
-        wind = daily.get("windspeed_10m_max") or []
+        wind_max = daily.get("windspeed_10m_max") or []
+        wind_mean = daily.get("windspeed_10m_mean") or []
+
+        # Fallback for mean temperature if API mean not provided
+        tmean = tmean_api if (tmean_api and len(tmean_api) == len(tmax) == len(tmin)) else [
+            (mx + mn) / 2 if mx is not None and mn is not None else None for mx, mn in zip(tmax, tmin)
+        ]
 
         # Basic stats and anomaly flags (z-score) for parity with Streamlit analysis
         tmax_stats = compute_stats(tmax)
         tmin_stats = compute_stats(tmin)
+        tmean_stats = compute_stats(tmean)
         precip_stats = compute_stats(precip)
-        wind_stats = compute_stats(wind)
-        tmax_anoms = detect_anomalies(tmax)
+        wind_stats = compute_stats(wind_max)
+        rh_stats = compute_stats(rh_mean)
+        tmean_anoms = detect_anomalies(tmean)
 
         context.update({
             "has_results": True,
@@ -56,20 +68,85 @@ def daily_data(request):
             "dates": dates,
             "tmax": tmax,
             "tmin": tmin,
+            "tmean": tmean,
+            "rh_mean": rh_mean,
             "precip": precip,
-            "wind": wind,
+            "wind_max": wind_max,
+            "wind_mean": wind_mean,
+            "tmean_flags": tmean_anoms,
             # raw for table loop + anomaly flag per row
-            "rows": list(zip(dates, tmax, tmin, precip, wind, tmax_anoms)),
+            "rows": list(zip(dates, tmax, tmin, tmean, rh_mean, precip, wind_max, tmean_anoms)),
             # stats
             "stats": {
                 "tmax": tmax_stats,
                 "tmin": tmin_stats,
+                "tmean": tmean_stats,
                 "precip": precip_stats,
                 "wind": wind_stats,
+                "rh": rh_stats,
             },
         })
 
     return render(request, "weatherarchive/results.html", context)
+
+
+def home(request):
+    return render(request, "weatherarchive/home.html", {})
+
+
+def contact(request):
+    success = False
+    if request.method == "POST":
+        form = ContactForm(request.POST)
+        if form.is_valid():
+            # Honeypot check (if present)
+            if hasattr(form, 'cleaned_data') and form.cleaned_data.get('honeypot'):
+                form = ContactForm()  # reset form
+            else:
+                name = form.cleaned_data.get("name", "Anonymous")
+                sender_email = form.cleaned_data.get("email", "")
+                message_text = form.cleaned_data.get("message", "")
+                subject = f"Website contact from {name}"
+                body = f"Name: {name}\nEmail: {sender_email}\n\nMessage:\n{message_text}"
+                email = EmailMessage(
+                    subject=subject,
+                    body=body,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[settings.CONTACT_RECIPIENT_EMAIL],
+                    reply_to=[sender_email] if sender_email else None
+                )
+                email.send(fail_silently=False)
+                success = True
+                form = ContactForm()  # reset form
+    else:
+        form = ContactForm()
+    return render(request, "weatherarchive/contact.html", {"form": form, "success": success})
+
+
+from .models import Testimonial
+from django.shortcuts import redirect
+
+
+def testimonials(request):
+    success = False
+    if request.method == "POST":
+        from .forms import TestimonialForm
+        form = TestimonialForm(request.POST)
+        if form.is_valid():
+            Testimonial.objects.create(
+                name=form.cleaned_data["name"],
+                role=form.cleaned_data.get("role", ""),
+                rating=form.cleaned_data["rating"],
+                message=form.cleaned_data["message"],
+            )
+            return redirect("weatherarchive:testimonials")
+    else:
+        form = None
+    items = Testimonial.objects.all()[:25]
+    if form is None:
+        from .forms import TestimonialForm
+        form = TestimonialForm()
+    return render(request, "weatherarchive/testimonials.html", {"testimonials": list(items), "form": form, "success": success})
 
 
 def hourly_data(request):
@@ -96,11 +173,15 @@ def hourly_data(request):
         rh = hourly.get("relative_humidity_2m") or []
         precip = hourly.get("precipitation") or []
         wind = hourly.get("windspeed_10m") or []
+        cloud = hourly.get("cloudcover") or []
+        pressure = hourly.get("surface_pressure") or []
 
         temp_stats = compute_stats(temp)
         rh_stats = compute_stats(rh)
         precip_stats = compute_stats(precip)
         wind_stats = compute_stats(wind)
+        cloud_stats = compute_stats(cloud)
+        pressure_stats = compute_stats(pressure)
         temp_anoms = detect_anomalies(temp)
 
         context.update({
@@ -115,12 +196,17 @@ def hourly_data(request):
             "rh": rh,
             "precip": precip,
             "wind": wind,
-            "rows": list(zip(times, temp, rh, precip, wind, temp_anoms)),
+            "cloud": cloud,
+            "pressure": pressure,
+            "temp_flags": temp_anoms,
+            "rows": list(zip(times, temp, rh, precip, wind, cloud, pressure, temp_anoms)),
             "stats": {
                 "temp": temp_stats,
                 "rh": rh_stats,
                 "precip": precip_stats,
                 "wind": wind_stats,
+                "cloud": cloud_stats,
+                "pressure": pressure_stats,
             },
         })
 
@@ -148,14 +234,20 @@ def download_daily_csv(request):
     dates = daily.get("time") or []
     tmax = daily.get("temperature_2m_max") or []
     tmin = daily.get("temperature_2m_min") or []
+    tmean_api = daily.get("temperature_2m_mean") or []
+    tmean = tmean_api if (tmean_api and len(tmean_api) == len(tmax) == len(tmin)) else [
+        (mx + mn) / 2 if mx is not None and mn is not None else None for mx, mn in zip(tmax, tmin)
+    ]
+    rh_mean = daily.get("relative_humidity_2m_mean") or []
     precip = daily.get("precipitation_sum") or []
-    wind = daily.get("windspeed_10m_max") or []
+    wind_max = daily.get("windspeed_10m_max") or []
+    wind_mean = daily.get("windspeed_10m_mean") or []
 
     # Build CSV in-memory
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["date", "temp_max_c", "temp_min_c", "precip_mm", "wind_max_kmh"])
-    for row in zip(dates, tmax, tmin, precip, wind):
+    writer.writerow(["date", "temp_max_c", "temp_min_c", "temp_mean_c", "rh_mean_pct", "precip_mm", "wind_max_kmh", "wind_mean_kmh"])
+    for row in zip(dates, tmax, tmin, tmean, rh_mean, precip, wind_max, wind_mean):
         writer.writerow(row)
 
     resp = HttpResponse(buf.getvalue(), content_type="text/csv")
@@ -184,11 +276,13 @@ def download_hourly_csv(request):
     rh = hourly.get("relative_humidity_2m") or []
     precip = hourly.get("precipitation") or []
     wind = hourly.get("windspeed_10m") or []
+    cloud = hourly.get("cloudcover") or []
+    pressure = hourly.get("surface_pressure") or []
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["time", "temp_c", "rh_pct", "precip_mm", "wind_kmh"])
-    for row in zip(times, temp, rh, precip, wind):
+    writer.writerow(["time", "temp_c", "rh_pct", "precip_mm", "wind_kmh", "cloud_pct", "pressure_hpa"])
+    for row in zip(times, temp, rh, precip, wind, cloud, pressure):
         writer.writerow(row)
 
     resp = HttpResponse(buf.getvalue(), content_type="text/csv")

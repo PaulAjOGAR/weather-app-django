@@ -11,6 +11,7 @@
     <div class="row full">
       {{ form.location.label_tag }}
       {{ form.location }}
+      <datalist id="loc-suggestions"></datalist>
       {% if form.location.errors %}<div class="error">{{ form.location.errors.0 }}</div>{% endif %}
     </div>
     <div class="row">
@@ -34,6 +35,43 @@
   </form>
 </section>
 
+<script>
+  document.addEventListener('DOMContentLoaded', function(){
+    const input = document.querySelector('input[name="location"]');
+    const dl = document.getElementById('loc-suggestions');
+    if (input && dl){
+      // Connect input to datalist
+      input.setAttribute('list', 'loc-suggestions');
+      let controller = null;
+      let lastQuery = '';
+      let debounceId = null;
+      function fetchSuggestions(q){
+        if (!q || q.length < 2) { dl.innerHTML=''; return; }
+        if (q === lastQuery) return;
+        lastQuery = q;
+        if (controller) controller.abort();
+        controller = new AbortController();
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5`;
+        fetch(url, {signal: controller.signal})
+          .then(r=>r.json())
+          .then(j=>{
+            const results = (j && j.results) || [];
+            dl.innerHTML = results.map(r=>{
+              const name = `${r.name}, ${r.admin1 ? r.admin1 + ', ' : ''}${r.country_code || ''}`.replace(/,\s*$/, '');
+              return `<option value="${name}"></option>`;
+            }).join('');
+          })
+          .catch(()=>{});
+      }
+      input.addEventListener('input', ()=>{
+        clearTimeout(debounceId);
+        const q = input.value.trim();
+        debounceId = setTimeout(()=> fetchSuggestions(q), 250);
+      });
+    }
+  });
+</script>
+
 {% if error %}
   <p class="error" style="margin-top:10px">{{ error }}</p>
 {% endif %}
@@ -44,9 +82,9 @@
     <p class="muted">From {{ start }} to {{ end }}</p>
 
     <div class="cards">
-      <div class="stat"><h4>Tmax mean</h4><div class="val">{{ stats.tmax.mean|floatformat:2 }}</div></div>
-      <div class="stat"><h4>Tmax std</h4><div class="val">{{ stats.tmax.std|floatformat:2 }}</div></div>
-      <div class="stat"><h4>Tmin mean</h4><div class="val">{{ stats.tmin.mean|floatformat:2 }}</div></div>
+      <div class="stat"><h4>Tmean mean</h4><div class="val">{{ stats.tmean.mean|floatformat:2 }}</div></div>
+      <div class="stat"><h4>Tmean std</h4><div class="val">{{ stats.tmean.std|floatformat:2 }}</div></div>
+      <div class="stat"><h4>RH mean</h4><div class="val">{{ stats.rh.mean|floatformat:2 }}</div></div>
       <div class="stat"><h4>Precip mean</h4><div class="val">{{ stats.precip.mean|floatformat:2 }}</div></div>
     </div>
 
@@ -57,17 +95,21 @@
             <th>Date</th>
             <th>Temp Max (°C)</th>
             <th>Temp Min (°C)</th>
+            <th>Temp Mean (°C)</th>
+            <th>RH Avg (%)</th>
             <th>Precip (mm)</th>
             <th>Wind Max (km/h)</th>
-            <th>tmax Anom?</th>
+            <th>tmean Anom?</th>
           </tr>
         </thead>
         <tbody>
-          {% for d, mx, mn, pr, wd, an in rows %}
+          {% for d, mx, mn, meanv, rhv, pr, wd, an in rows %}
             <tr>
               <td>{{ d }}</td>
               <td>{{ mx }}</td>
               <td>{{ mn }}</td>
+              <td>{{ meanv }}</td>
+              <td>{{ rhv }}</td>
               <td>{{ pr }}</td>
               <td>{{ wd }}</td>
               <td><span class="pill {% if an %}bad{% else %}ok{% endif %}">{% if an %}Yes{% else %}No{% endif %}</span></td>
@@ -85,20 +127,31 @@
     {{ dates|json_script:"dates-data" }}
     {{ tmax|json_script:"tmax-data" }}
     {{ tmin|json_script:"tmin-data" }}
+    {{ tmean|json_script:"tmean-data" }}
+    {{ rh_mean|json_script:"rh-data" }}
     {{ precip|json_script:"precip-data" }}
-    {{ wind|json_script:"wind-data" }}
+    {{ wind_max|json_script:"windmax-data" }}
+    {{ wind_mean|json_script:"windmean-data" }}
+    {{ tmean_flags|json_script:"tmean-flags" }}
   </section>
   <script>
     document.addEventListener('DOMContentLoaded', function(){
       const dates = JSON.parse(document.getElementById('dates-data').textContent);
       const tmax = JSON.parse(document.getElementById('tmax-data').textContent);
       const tmin = JSON.parse(document.getElementById('tmin-data').textContent);
+      const tmean = JSON.parse(document.getElementById('tmean-data').textContent);
+      const rh = JSON.parse(document.getElementById('rh-data').textContent);
       const precip = JSON.parse(document.getElementById('precip-data').textContent);
-      const wind = JSON.parse(document.getElementById('wind-data').textContent);
-      // Temperature chart
+      const windmax = JSON.parse(document.getElementById('windmax-data').textContent);
+      const windmean = JSON.parse(document.getElementById('windmean-data').textContent);
+      // Temperature chart with anomaly markers
+      const flags = JSON.parse(document.getElementById('tmean-flags').textContent);
+      const anomX = dates.filter((_, i) => flags[i]);
+      const anomY = tmean.filter((_, i) => flags[i]);
       const tempData = [
-        {x: dates, y: tmax, type: 'scatter', mode: 'lines+markers', name: 'Tmax (°C)', line:{color:'#ff6b6b'}},
-        {x: dates, y: tmin, type: 'scatter', mode: 'lines+markers', name: 'Tmin (°C)', line:{color:'#4cc9f0'}}
+        {x: dates, y: tmean, type: 'scatter', mode: 'lines+markers', name: 'Tmean (°C)', line:{color:'#ff6b6b'}},
+        {x: dates, y: tmin, type: 'scatter', mode: 'lines+markers', name: 'Tmin (°C)', line:{color:'#4cc9f0'}},
+        {x: anomX, y: anomY, type: 'scatter', mode: 'markers', name: 'Anomalies', marker:{color:'#ff6b6b', size:8, symbol:'circle-open'}}
       ];
       const tempLayout = {
         paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
@@ -113,7 +166,7 @@
       // Precipitation and wind chart (bar + line)
       const prData = [
         {x: dates, y: precip, type: 'bar', name: 'Precip (mm)', marker:{color:'#a1ffce'}},
-        {x: dates, y: wind, type: 'scatter', mode: 'lines', name: 'Wind Max (km/h)', yaxis:'y2', line:{color:'#b9ccf0'}}
+        {x: dates, y: windmax, type: 'scatter', mode: 'lines', name: 'Wind Max (km/h)', yaxis:'y2', line:{color:'#b9ccf0'}}
       ];
       const prLayout = {
         paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',

@@ -11,6 +11,7 @@
     <div class="row full">
       {{ form.location.label_tag }}
       {{ form.location }}
+      <datalist id="loc-suggestions"></datalist>
       {% if form.location.errors %}<div class="error">{{ form.location.errors.0 }}</div>{% endif %}
     </div>
     <div class="row">
@@ -34,6 +35,42 @@
   </form>
 </section>
 
+<script>
+  document.addEventListener('DOMContentLoaded', function(){
+    const input = document.querySelector('input[name="location"]');
+    const dl = document.getElementById('loc-suggestions');
+    if (input && dl){
+      input.setAttribute('list', 'loc-suggestions');
+      let controller = null;
+      let lastQuery = '';
+      let debounceId = null;
+      function fetchSuggestions(q){
+        if (!q || q.length < 2) { dl.innerHTML=''; return; }
+        if (q === lastQuery) return;
+        lastQuery = q;
+        if (controller) controller.abort();
+        controller = new AbortController();
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5`;
+        fetch(url, {signal: controller.signal})
+          .then(r=>r.json())
+          .then(j=>{
+            const results = (j && j.results) || [];
+            dl.innerHTML = results.map(r=>{
+              const name = `${r.name}, ${r.admin1 ? r.admin1 + ', ' : ''}${r.country_code || ''}`.replace(/,\s*$/, '');
+              return `<option value="${name}"></option>`;
+            }).join('');
+          })
+          .catch(()=>{});
+      }
+      input.addEventListener('input', ()=>{
+        clearTimeout(debounceId);
+        const q = input.value.trim();
+        debounceId = setTimeout(()=> fetchSuggestions(q), 250);
+      });
+    }
+  });
+</script>
+
 {% if error %}
   <p class="error" style="margin-top:10px">{{ error }}</p>
 {% endif %}
@@ -44,10 +81,10 @@
     <p class="muted">From {{ start }} to {{ end }}</p>
 
     <div class="cards">
-      <div class="stat"><h4>Temp mean</h4><div class="val">{{ stats.temp.mean|floatformat:2 }}</div></div>
       <div class="stat"><h4>Temp std</h4><div class="val">{{ stats.temp.std|floatformat:2 }}</div></div>
-      <div class="stat"><h4>RH mean</h4><div class="val">{{ stats.rh.mean|floatformat:2 }}</div></div>
-      <div class="stat"><h4>Wind mean</h4><div class="val">{{ stats.wind.mean|floatformat:2 }}</div></div>
+      <div class="stat"><h4>RH std</h4><div class="val">{{ stats.rh.std|floatformat:2 }}</div></div>
+      <div class="stat"><h4>Cloud mean</h4><div class="val">{{ stats.cloud.mean|floatformat:2 }}</div></div>
+      <div class="stat"><h4>Pressure mean</h4><div class="val">{{ stats.pressure.mean|floatformat:2 }}</div></div>
     </div>
 
     <div style="overflow:auto">
@@ -59,17 +96,21 @@
             <th>RH (%)</th>
             <th>Precip (mm)</th>
             <th>Wind (km/h)</th>
+            <th>Cloud (%)</th>
+            <th>Pressure (hPa)</th>
             <th>Temp Anom?</th>
           </tr>
         </thead>
         <tbody>
-          {% for t, ta, rh, pr, wd, an in rows %}
+          {% for t, ta, rhv, pr, wd, cl, ps, an in rows %}
             <tr>
               <td>{{ t }}</td>
               <td>{{ ta }}</td>
-              <td>{{ rh }}</td>
+              <td>{{ rhv }}</td>
               <td>{{ pr }}</td>
               <td>{{ wd }}</td>
+              <td>{{ cl }}</td>
+              <td>{{ ps }}</td>
               <td><span class="pill {% if an %}bad{% else %}ok{% endif %}">{% if an %}Yes{% else %}No{% endif %}</span></td>
             </tr>
           {% empty %}
@@ -87,6 +128,9 @@
     {{ rh|json_script:"rh-data" }}
     {{ precip|json_script:"precip-data" }}
     {{ wind|json_script:"wind-data" }}
+    {{ cloud|json_script:"cloud-data" }}
+    {{ pressure|json_script:"pressure-data" }}
+    {{ temp_flags|json_script:"temp-flags" }}
   </section>
   <script>
     document.addEventListener('DOMContentLoaded', function(){
@@ -96,9 +140,13 @@
       const precip = JSON.parse(document.getElementById('precip-data').textContent);
       const wind = JSON.parse(document.getElementById('wind-data').textContent);
 
+      const flags = JSON.parse(document.getElementById('temp-flags').textContent);
+      const anX = times.filter((_, i) => flags[i]);
+      const anY = temp.filter((_, i) => flags[i]);
       const tData = [
         {x: times, y: temp, type: 'scatter', mode: 'lines', name: 'Temp (°C)', line:{color:'#ff6b6b'}},
-        {x: times, y: rh, type: 'scatter', mode: 'lines', name: 'RH (%)', yaxis: 'y2', line:{color:'#4cc9f0'}}
+        {x: times, y: rh, type: 'scatter', mode: 'lines', name: 'RH (%)', yaxis: 'y2', line:{color:'#4cc9f0'}},
+        {x: anX, y: anY, type: 'scatter', mode: 'markers', name: 'Anomalies', marker:{color:'#ff6b6b', size:6, symbol:'circle-open'}}
       ];
       const tLayout = {
         paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',

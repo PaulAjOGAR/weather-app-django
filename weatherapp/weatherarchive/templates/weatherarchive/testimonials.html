@@ -1,0 +1,59 @@
+{% extends 'weatherarchive/base.html' %}
+{% block title %}Testimonials • Weather Archive{% endblock %}
+{% block content %}
+<section class="card pad">
+  <h1>User Testimonials</h1>
+  <p class="muted">Share your experience with Weather Archive. Your testimonial may be featured below.</p>
+  <form method="post" style="margin-top:12px">
+    {% csrf_token %}
+    <div class="row full">{{ form.non_field_errors }}</div>
+    <div class="row">
+      <div>
+        {{ form.name.label_tag }}
+        {{ form.name }}
+        {% if form.name.errors %}<div class="error">{{ form.name.errors.0 }}</div>{% endif %}
+      </div>
+      <div>
+        {{ form.role.label_tag }}
+        {{ form.role }}
+        {% if form.role.errors %}<div class="error">{{ form.role.errors.0 }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        {{ form.rating.label_tag }}
+        {{ form.rating }}
+        {% if form.rating.errors %}<div class="error">{{ form.rating.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="row full">
+        {{ form.message.label_tag }}
+        {{ form.message }}
+        {% if form.message.errors %}<div class="error">{{ form.message.errors.0 }}</div>{% endif %}
+      </div>
+    </div>
+    {{ form.honeypot }}
+    <div class="actions">
+      <button class="btn" type="submit">Submit Testimonial</button>
+    </div>
+  </form>
+</section>
+<section class="grid" style="margin-top:16px">
+  {% for t in testimonials %}
+    <div class="card pad">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="logo" aria-hidden="true" style="width:24px;height:24px"></div>
+        <div><strong>{{ t.name }}</strong>{% if t.role %}<div class="muted" style="font-size:12px">{{ t.role }}</div>{% endif %}</div>
+        <div class="muted" style="margin-left:auto;font-size:12px">{{ t.created_at|date:'Y-m-d' }}</div>
+      </div>
+      <div style="margin-top:10px">{{ t.message }}</div>
+      <div style="margin-top:8px;color:#ffe66d">
+        {% for i in "12345" %}
+          {% if forloop.counter <= t.rating %}★{% else %}☆{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  {% empty %}
+    <div class="card pad"><p class="muted">No testimonials yet. Be the first to share your experience!</p></div>
+  {% endfor %}
+</section>
+{% endblock %}

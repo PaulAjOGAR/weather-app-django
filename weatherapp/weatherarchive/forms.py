@@ -50,12 +50,16 @@ class WeatherDailyForm(forms.Form):
 
         if start_date and end_date:
             # Enforce lower bound for historical data
-            from datetime import date as _date
+            from datetime import date as _date, timedelta as _td
             min_start = _date(1940, 1, 1)
             if start_date < min_start:
                 self.add_error("start_date", "Start date cannot be earlier than 1940-01-01.")
             if start_date > end_date:
                 self.add_error("end_date", "End date must be after start date.")
+            else:
+                # Max 92-day window per app requirements
+                if (end_date - start_date) > _td(days=92):
+                    self.add_error("end_date", "The selected date range must not exceed 92 days.")
 
         return cleaned_data
 
@@ -63,3 +67,37 @@ class WeatherDailyForm(forms.Form):
 class WeatherHourlyForm(WeatherDailyForm):
     """Reuse same fields/validation for hourly queries."""
     pass
+
+
+class ContactForm(forms.Form):
+    name = forms.CharField(label="Your name", max_length=100)
+    email = forms.EmailField(label="Email")
+    message = forms.CharField(label="Message", widget=forms.Textarea(attrs={"rows": 6}))
+    # Simple honeypot to reduce spam (hidden via CSS in template base styles or inline)
+    honeypot = forms.CharField(required=False, widget=forms.HiddenInput)
+
+    def clean_honeypot(self):
+        val = self.cleaned_data.get("honeypot")
+        if val:
+            raise forms.ValidationError("Invalid submission.")
+        return val
+
+
+class TestimonialForm(forms.Form):
+    name = forms.CharField(label="Your name", max_length=100)
+    role = forms.CharField(label="Your role (optional)", max_length=100, required=False)
+    rating = forms.ChoiceField(label="Rating", choices=[(str(i), f"{i}") for i in range(1,6)])
+    message = forms.CharField(label="Your testimonial", widget=forms.Textarea(attrs={"rows": 5}))
+    honeypot = forms.CharField(required=False, widget=forms.HiddenInput)
+
+    def clean_rating(self):
+        val = int(self.cleaned_data.get("rating") or 5)
+        if val < 1 or val > 5:
+            raise forms.ValidationError("Rating must be between 1 and 5.")
+        return val
+
+    def clean_honeypot(self):
+        val = self.cleaned_data.get("honeypot")
+        if val:
+            raise forms.ValidationError("Invalid submission.")
+        return val
