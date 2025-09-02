@@ -1,7 +1,9 @@
 from django.urls import path
 from . import views
-"""from .. site.urls import urlpatterns"""
+
+app_name = 'weatherarchive'
 
 urlpatterns = [
-    path('',views.location_search, name='location_search'),
+    path('', views.daily_data, name='daily_data'),
+    path('download/', views.download_daily_csv, name='download_daily_csv'),
 ]

@@ -1,15 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Search Results</title>
+    <meta charset="utf-8">
+    <title>Daily Weather</title>
 </head>
 <body>
-    <h1>Search Results</h1>
-    <p>Choice: {{ choice }}</p>
-    <p>City: {{ city }}</p>
-    <p>Postcode: {{ postcode }}</p>
-    <p>Latitude: {{ latitude }}</p>
-    <p>Longitude: {{ longitude }}</p>
-    <a href="{% url 'location_search' %}">Back</a>
+    <h1>Daily Weather Archive</h1>
+
+    <form method="get" action="">
+        {{ form.as_p }}
+        <button type="submit">Search</button>
+    </form>
+
+    {% if error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+
+    {% if has_results %}
+        <h2>Results for {{ display_name }} ({{ lat }}, {{ lon }})</h2>
+        <p>From {{ start }} to {{ end }}</p>
+        <p>
+            <a href="{% url 'weatherarchive:download_daily_csv' %}?location={{ form.cleaned_data.location }}&start_date={{ form.cleaned_data.start_date }}&end_date={{ form.cleaned_data.end_date }}">Download CSV</a>
+        </p>
+        <table border="1" cellpadding="4" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Temp Max (°C)</th>
+                    <th>Temp Min (°C)</th>
+                    <th>Precip (mm)</th>
+                    <th>Wind Max (km/h)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d, mx, mn, pr, wd in rows %}
+                    <tr>
+                        <td>{{ d }}</td>
+                        <td>{{ mx }}</td>
+                        <td>{{ mn }}</td>
+                        <td>{{ pr }}</td>
+                        <td>{{ wd }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="5">No data available for the selected range.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
 </body>
 </html>
