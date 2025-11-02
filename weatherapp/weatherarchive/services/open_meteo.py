@@ -53,36 +53,39 @@ def geocode(name: str) -> Tuple[Optional[float], Optional[float], Optional[str]]
 
 
 def fetch_daily(lat: float, lon: float, start: date, end: date) -> Dict:
-    """Fetch daily history from Open-Meteo Archive API."""
-    # Include additional aggregates where available: temperature mean, RH mean, wind mean
+    """Fetch daily history from Open-Meteo Archive API. Returns {} on failure."""
     daily_params = ",".join([
         "temperature_2m_max",
         "temperature_2m_min",
         "temperature_2m_mean",
         "relative_humidity_2m_mean",
         "precipitation_sum",
+        "rain_sum",
+        "uv_index_max",
         "windspeed_10m_max",
         "windspeed_10m_mean",
     ])
-    r = _session.get(
-        "https://archive-api.open-meteo.com/v1/archive",
-        params={
-            "latitude": lat,
-            "longitude": lon,
-            "start_date": start.isoformat(),
-            "end_date": end.isoformat(),
-            "daily": daily_params,
-            "timezone": "auto",
-        },
-        timeout=30,
-    )
-    r.raise_for_status()
-    return r.json()
+    try:
+        r = _session.get(
+            "https://archive-api.open-meteo.com/v1/archive",
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "daily": daily_params,
+                "timezone": "auto",
+            },
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return {}
 
 
 def fetch_hourly(lat: float, lon: float, start: date, end: date) -> Dict:
-    """Fetch hourly history from Open-Meteo Archive API (basic common vars)."""
-    # Include cloud cover and surface pressure if available
+    """Fetch hourly history from Open-Meteo Archive API (basic common vars). Returns {} on failure."""
     hourly_params = ",".join([
         "temperature_2m",
         "relative_humidity_2m",
@@ -91,17 +94,20 @@ def fetch_hourly(lat: float, lon: float, start: date, end: date) -> Dict:
         "cloudcover",
         "surface_pressure",
     ])
-    r = _session.get(
-        "https://archive-api.open-meteo.com/v1/archive",
-        params={
-            "latitude": lat,
-            "longitude": lon,
-            "start_date": start.isoformat(),
-            "end_date": end.isoformat(),
-            "hourly": hourly_params,
-            "timezone": "auto",
-        },
-        timeout=30,
-    )
-    r.raise_for_status()
-    return r.json()
+    try:
+        r = _session.get(
+            "https://archive-api.open-meteo.com/v1/archive",
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "hourly": hourly_params,
+                "timezone": "auto",
+            },
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return {}
