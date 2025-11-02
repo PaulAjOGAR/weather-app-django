@@ -29,7 +29,7 @@
     <div class="actions">
       <button class="btn" type="submit">Search</button>
       {% if has_results %}
-        <a class="btn secondary" href="{% url 'weatherarchive:download_daily_csv' %}?location={{ form.cleaned_data.location }}&start_date={{ form.cleaned_data.start_date }}&end_date={{ form.cleaned_data.end_date }}">Download CSV</a>
+        <a class="btn secondary" href="{% url 'weatherarchive:download_daily_csv' %}?location={{ form.cleaned_data.location }}&start_date={{ form.cleaned_data.start_date|date:'Y-m-d' }}&end_date={{ form.cleaned_data.end_date|date:'Y-m-d' }}">Download CSV</a>
       {% endif %}
     </div>
   </form>
@@ -121,8 +121,21 @@
       </table>
     </div>
     <div id="charts" style="margin-top:16px">
-      <div id="chart_temp" class="card plot" style="padding:8px;margin-bottom:12px"></div>
-      <div id="chart_precip" class="card plot" style="padding:8px"></div>
+      <div class="card pad" style="margin-bottom:12px">
+        <strong>Charts to display:</strong>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_temp" checked> Temperature</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_precip" checked> Precipitation & Wind</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_rh" checked> RH & UV Index</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_wind" checked> Wind Compare</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_range" checked> Temp Range Band</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_dew" checked> Dew Point vs Temp</label>
+      </div>
+      <div id="chart_temp" data-chart="temp" class="card plot" style="padding:8px;margin-bottom:12px"></div>
+      <div id="chart_precip" data-chart="precip" class="card plot" style="padding:8px;margin-bottom:12px"></div>
+      <div id="chart_rh" data-chart="rh" class="card plot" style="padding:8px;margin-bottom:12px"></div>
+      <div id="chart_wind" data-chart="wind" class="card plot" style="padding:8px;margin-bottom:12px"></div>
+      <div id="chart_range" data-chart="range" class="card plot" style="padding:8px;margin-top:12px"></div>
+      <div id="chart_dew" data-chart="dew" class="card plot" style="padding:8px;margin-top:12px"></div>
     </div>
     {{ dates|json_script:"dates-data" }}
     {{ tmax|json_script:"tmax-data" }}
@@ -132,6 +145,8 @@
     {{ precip|json_script:"precip-data" }}
     {{ wind_max|json_script:"windmax-data" }}
     {{ wind_mean|json_script:"windmean-data" }}
+    {{ rain_sum|json_script:"rain-data" }}
+    {{ uv_index|json_script:"uv-data" }}
     {{ tmean_flags|json_script:"tmean-flags" }}
   </section>
   <script>
@@ -144,6 +159,43 @@
       const precip = JSON.parse(document.getElementById('precip-data').textContent);
       const windmax = JSON.parse(document.getElementById('windmax-data').textContent);
       const windmean = JSON.parse(document.getElementById('windmean-data').textContent);
+      const rain = document.getElementById('rain-data') ? JSON.parse(document.getElementById('rain-data').textContent) : [];
+      const uv = document.getElementById('uv-data') ? JSON.parse(document.getElementById('uv-data').textContent) : [];
+
+      // Chart visibility settings (persisted)
+      const dailyKey = 'daily_charts';
+      const defaults = {temp:true, precip:true, rh:true, wind:true, range:true, dew:true};
+      let prefs = defaults;
+      try { prefs = Object.assign({}, defaults, JSON.parse(localStorage.getItem(dailyKey) || '{}')); } catch(e){}
+      const boxes = {
+        temp: document.getElementById('chk_temp'),
+        precip: document.getElementById('chk_precip'),
+        rh: document.getElementById('chk_rh'),
+        wind: document.getElementById('chk_wind'),
+        range: document.getElementById('chk_range'),
+        dew: document.getElementById('chk_dew'),
+      };
+      // Apply initial checkbox states
+      Object.keys(boxes).forEach(k => { if (boxes[k]) boxes[k].checked = !!prefs[k]; });
+      // Apply initial visibility
+      function applyVis(){
+        document.querySelectorAll('#charts [data-chart]').forEach(div=>{
+          const key = div.getAttribute('data-chart');
+          const show = prefs[key] !== false;
+          div.style.display = show ? '' : 'none';
+        });
+      }
+      applyVis();
+      // Save and toggle on change
+      Object.keys(boxes).forEach(k=>{
+        const el = boxes[k];
+        if (el) el.addEventListener('change', ()=>{
+          prefs[k] = !!el.checked;
+          localStorage.setItem(dailyKey, JSON.stringify(prefs));
+          applyVis();
+        });
+      });
+
       // Temperature chart with anomaly markers
       const flags = JSON.parse(document.getElementById('tmean-flags').textContent);
       const anomX = dates.filter((_, i) => flags[i]);
@@ -163,9 +215,12 @@
       };
       Plotly.newPlot('chart_temp', tempData, tempLayout, {displayModeBar:false, responsive:true});
 
-      // Precipitation and wind chart (bar + line)
+      // Precipitation chart with cumulative line and wind overlay
+      const cumulative = []; let sum = 0;
+      for (let i=0;i<precip.length;i++){ sum += (precip[i]||0); cumulative.push(sum); }
       const prData = [
         {x: dates, y: precip, type: 'bar', name: 'Precip (mm)', marker:{color:'#a1ffce'}},
+        {x: dates, y: cumulative, type: 'scatter', mode: 'lines', name: 'Cumulative Precip (mm)', line:{color:'#2bd4a5'}},
         {x: dates, y: windmax, type: 'scatter', mode: 'lines', name: 'Wind Max (km/h)', yaxis:'y2', line:{color:'#b9ccf0'}}
       ];
       const prLayout = {
@@ -178,6 +233,75 @@
         yaxis2: {title: 'Wind (km/h)', overlaying: 'y', side: 'right'}
       };
       Plotly.newPlot('chart_precip', prData, prLayout, {displayModeBar:false, responsive:true});
+
+      // RH vs UV chart
+      const rhuvData = [
+        {x: dates, y: rh, type: 'scatter', mode: 'lines', name: 'RH mean (%)', line:{color:'#4cc9f0'}},
+        {x: dates, y: uv, type: 'scatter', mode: 'lines', name: 'UV Index Max', yaxis:'y2', line:{color:'#ffd166'}}
+      ];
+      const rhuvLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#e8eef9'},
+        height: 320,
+        margin: {l:40, r:40, t:10, b:40},
+        xaxis: {title: 'Date', tickangle: -30, gridcolor:'#1f2d4a', automargin: true},
+        yaxis: {title: 'RH (%)', gridcolor:'#1f2d4a', automargin: true},
+        yaxis2: {title: 'UV Index', overlaying: 'y', side: 'right'}
+      };
+      Plotly.newPlot('chart_rh', rhuvData, rhuvLayout, {displayModeBar:false, responsive:true});
+
+      // Wind Max vs Wind Mean
+      const windData = [
+        {x: dates, y: windmax, type: 'scatter', mode: 'lines', name: 'Wind Max (km/h)', line:{color:'#b9ccf0'}},
+        {x: dates, y: windmean, type: 'scatter', mode: 'lines', name: 'Wind Mean (km/h)', line:{color:'#7aa2f7'}}
+      ];
+      const windLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#e8eef9'},
+        height: 320,
+        margin: {l:40, r:20, t:10, b:40},
+        xaxis: {title: 'Date', tickangle: -30, gridcolor:'#1f2d4a', automargin: true},
+        yaxis: {title: 'Wind (km/h)', gridcolor:'#1f2d4a', automargin: true}
+      };
+      Plotly.newPlot('chart_wind', windData, windLayout, {displayModeBar:false, responsive:true});
+
+      // Temperature range band (tmin..tmax) with tmean overlay
+      const rangeData = [
+        {x: dates, y: tmax, type: 'scatter', mode: 'lines', name: 'Tmax (°C)', line:{color:'rgba(255,107,107,0.3)'}, fill: 'none'},
+        {x: dates, y: tmin, type: 'scatter', mode: 'lines', name: 'Tmin (°C)', line:{color:'rgba(76,201,240,0.3)'}, fill: 'tonexty', fillcolor:'rgba(125,165,220,0.25)'},
+        {x: dates, y: tmean, type: 'scatter', mode: 'lines', name: 'Tmean (°C)', line:{color:'#ff6b6b'}}
+      ];
+      const rangeLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#e8eef9'},
+        height: 320,
+        margin: {l:40, r:20, t:10, b:40},
+        xaxis: {title: 'Date', tickangle: -30, gridcolor:'#1f2d4a', automargin: true},
+        yaxis: {title: '°C', gridcolor:'#1f2d4a', automargin: true}
+      };
+      Plotly.newPlot('chart_range', rangeData, rangeLayout, {displayModeBar:false, responsive:true});
+
+      // Dew point vs Temperature (Magnus approximation)
+      function dewpointC(T, RH){
+        if (T === null || T === undefined || RH === null || RH === undefined) return null;
+        const a = 17.62, b = 243.12; // over water
+        const gamma = (a*T)/(b+T) + Math.log(Math.max(1e-6, RH/100));
+        return (b*gamma)/(a-gamma);
+      }
+      const dew = tmean.map((T,i)=> dewpointC(T, rh[i]));
+      const dewData = [
+        {x: dates, y: tmean, type: 'scatter', mode: 'lines', name: 'Tmean (°C)', line:{color:'#ff6b6b'}},
+        {x: dates, y: dew, type: 'scatter', mode: 'lines', name: 'Dew Point (°C)', line:{color:'#90cdf4'}},
+      ];
+      const dewLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#e8eef9'},
+        height: 320,
+        margin: {l:40, r:20, t:10, b:40},
+        xaxis: {title: 'Date', tickangle: -30, gridcolor:'#1f2d4a', automargin: true},
+        yaxis: {title: '°C', gridcolor:'#1f2d4a', automargin: true}
+      };
+      Plotly.newPlot('chart_dew', dewData, dewLayout, {displayModeBar:false, responsive:true});
     });
   </script>
 {% endif %}

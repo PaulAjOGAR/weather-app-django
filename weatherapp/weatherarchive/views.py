@@ -33,8 +33,11 @@ def daily_data(request):
         data = svc_fetch_daily(lat, lon, start, end)
 
         # Guard for missing data
-        daily = data.get("daily") or {}
+        daily = (data or {}).get("daily") or {}
         dates = daily.get("time") or []
+        if not dates:
+            context["error"] = "No data available for the selected range. Try different dates."
+            return render(request, "weatherarchive/results.html", context)
         tmax = daily.get("temperature_2m_max") or []
         tmin = daily.get("temperature_2m_min") or []
         tmean_api = daily.get("temperature_2m_mean") or []
@@ -71,10 +74,12 @@ def daily_data(request):
             "tmean": tmean,
             "rh_mean": rh_mean,
             "precip": precip,
+            "rain_sum": daily.get("rain_sum") or [],
+            "uv_index": daily.get("uv_index_max") or [],
             "wind_max": wind_max,
             "wind_mean": wind_mean,
             "tmean_flags": tmean_anoms,
-            # raw for table loop + anomaly flag per row
+            # raw for table loop and anomaly flag per row
             "rows": list(zip(dates, tmax, tmin, tmean, rh_mean, precip, wind_max, tmean_anoms)),
             # stats
             "stats": {
@@ -91,7 +96,17 @@ def daily_data(request):
 
 
 def home(request):
-    return render(request, "weatherarchive/home.html", {})
+    from .models import Testimonial
+    testimonials = Testimonial.objects.order_by('-created_at')[:5]
+    avg_rating = None
+    count = testimonials.count()
+    if count > 0:
+        avg_rating = round(sum(t.rating for t in testimonials) / count, 2)
+    return render(request, "weatherarchive/home.html", {
+        "testimonials": testimonials,
+        "avg_rating": avg_rating,
+        "testimonial_count": count,
+    })
 
 
 def contact(request):
@@ -167,8 +182,11 @@ def hourly_data(request):
             return render(request, "weatherarchive/hourly_results.html", context)
 
         data = svc_fetch_hourly(lat, lon, start, end)
-        hourly = data.get("hourly") or {}
+        hourly = (data or {}).get("hourly") or {}
         times = hourly.get("time") or []
+        if not times:
+            context["error"] = "No data available for the selected range. Try different dates."
+            return render(request, "weatherarchive/hourly_results.html", context)
         temp = hourly.get("temperature_2m") or []
         rh = hourly.get("relative_humidity_2m") or []
         precip = hourly.get("precipitation") or []

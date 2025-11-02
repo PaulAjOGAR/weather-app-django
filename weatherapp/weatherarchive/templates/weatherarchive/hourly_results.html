@@ -29,7 +29,7 @@
     <div class="actions">
       <button class="btn" type="submit">Search</button>
       {% if has_results %}
-        <a class="btn secondary" href="{% url 'weatherarchive:download_hourly_csv' %}?location={{ form.cleaned_data.location }}&start_date={{ form.cleaned_data.start_date }}&end_date={{ form.cleaned_data.end_date }}">Download CSV</a>
+        <a class="btn secondary" href="{% url 'weatherarchive:download_hourly_csv' %}?location={{ form.cleaned_data.location }}&start_date={{ form.cleaned_data.start_date|date:'Y-m-d' }}&end_date={{ form.cleaned_data.end_date|date:'Y-m-d' }}">Download CSV</a>
       {% endif %}
     </div>
   </form>
@@ -120,8 +120,23 @@
       </table>
     </div>
     <div id="charts" style="margin-top:16px">
-      <div id="chart_temp_hr" class="card plot" style="padding:8px;margin-bottom:12px"></div>
-      <div id="chart_precip_hr" class="card plot" style="padding:8px"></div>
+      <div class="card pad" style="margin-bottom:12px">
+        <strong>Charts to display:</strong>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_temp_hr" checked> Temperature & RH</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_precip_hr" checked> Precipitation & Wind</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_cloud_hr" checked> Cloud & Pressure</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_feel_hr" checked> Feels-like vs Temp</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_cumprec_hr" checked> Cumulative Precip</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_ptend_hr" checked> Pressure Tendency & Wind</label>
+        <label style="margin-left:10px"><input type="checkbox" id="chk_rhtemp_hr" checked> RH vs Temp Scatter</label>
+      </div>
+      <div id="chart_temp_hr" data-chart="temp" class="card plot" style="padding:8px;margin-bottom:12px"></div>
+      <div id="chart_precip_hr" data-chart="precip" class="card plot" style="padding:8px;margin-bottom:12px"></div>
+      <div id="chart_cloud_hr" data-chart="cloud" class="card plot" style="padding:8px;margin-bottom:12px"></div>
+      <div id="chart_feel_hr" data-chart="feel" class="card plot" style="padding:8px;margin-top:12px"></div>
+      <div id="chart_cumprec_hr" data-chart="cumprec" class="card plot" style="padding:8px;margin-top:12px"></div>
+      <div id="chart_ptend_hr" data-chart="ptend" class="card plot" style="padding:8px;margin-top:12px"></div>
+      <div id="chart_rhtemp_hr" data-chart="rhtemp" class="card plot" style="padding:8px;margin-top:12px"></div>
     </div>
     {{ times|json_script:"times-data" }}
     {{ temp|json_script:"temp-data" }}
@@ -139,6 +154,40 @@
       const rh = JSON.parse(document.getElementById('rh-data').textContent);
       const precip = JSON.parse(document.getElementById('precip-data').textContent);
       const wind = JSON.parse(document.getElementById('wind-data').textContent);
+      const cloud = JSON.parse(document.getElementById('cloud-data').textContent);
+      const pressure = JSON.parse(document.getElementById('pressure-data').textContent);
+
+      // Chart visibility settings (persisted)
+      const hourlyKey = 'hourly_charts';
+      const hDefaults = {temp:true, precip:true, cloud:true, feel:true, cumprec:true, ptend:true, rhtemp:true};
+      let hPrefs = hDefaults;
+      try { hPrefs = Object.assign({}, hDefaults, JSON.parse(localStorage.getItem(hourlyKey) || '{}')); } catch(e){}
+      const hBoxes = {
+        temp: document.getElementById('chk_temp_hr'),
+        precip: document.getElementById('chk_precip_hr'),
+        cloud: document.getElementById('chk_cloud_hr'),
+        feel: document.getElementById('chk_feel_hr'),
+        cumprec: document.getElementById('chk_cumprec_hr'),
+        ptend: document.getElementById('chk_ptend_hr'),
+        rhtemp: document.getElementById('chk_rhtemp_hr'),
+      };
+      Object.keys(hBoxes).forEach(k => { if (hBoxes[k]) hBoxes[k].checked = !!hPrefs[k]; });
+      function applyHrVis(){
+        document.querySelectorAll('#charts [data-chart]').forEach(div=>{
+          const key = div.getAttribute('data-chart');
+          const show = hPrefs[key] !== false;
+          div.style.display = show ? '' : 'none';
+        });
+      }
+      applyHrVis();
+      Object.keys(hBoxes).forEach(k=>{
+        const el = hBoxes[k];
+        if (el) el.addEventListener('change', ()=>{
+          hPrefs[k] = !!el.checked;
+          localStorage.setItem(hourlyKey, JSON.stringify(hPrefs));
+          applyHrVis();
+        });
+      });
 
       const flags = JSON.parse(document.getElementById('temp-flags').textContent);
       const anX = times.filter((_, i) => flags[i]);
@@ -173,6 +222,98 @@
         yaxis2: {title: 'Wind (km/h)', overlaying: 'y', side: 'right'}
       };
       Plotly.newPlot('chart_precip_hr', pData, pLayout, {displayModeBar:false, responsive:true});
+
+      // Cloud vs Pressure chart
+      const cpData = [
+        {x: times, y: cloud, type: 'scatter', mode: 'lines', name: 'Cloud (%)', line:{color:'#9ae6b4'}},
+        {x: times, y: pressure, type: 'scatter', mode: 'lines', name: 'Pressure (hPa)', yaxis:'y2', line:{color:'#ffd166'}}
+      ];
+      const cpLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#e8eef9'},
+        height: 320,
+        margin: {l:40, r:40, t:10, b:40},
+        xaxis: {title: 'Time', tickangle: -30, gridcolor:'#1f2d4a', automargin: true},
+        yaxis: {title: 'Cloud (%)', gridcolor:'#1f2d4a', automargin: true},
+        yaxis2: {title: 'Pressure (hPa)', overlaying: 'y', side: 'right'}
+      };
+      Plotly.newPlot('chart_cloud_hr', cpData, cpLayout, {displayModeBar:false, responsive:true});
+
+      // Feels-like (apparent) temperature vs actual temp
+      function heatIndexC(T, RH){
+        // Simple Rothfusz regression (approx) converted to °C, valid for warm temps
+        const T_F = T * 9/5 + 32;
+        const HI_F = -42.379 + 2.04901523*T_F + 10.14333127*RH - 0.22475541*T_F*RH - 0.00683783*T_F*T_F - 0.05481717*RH*RH + 0.00122874*T_F*T_F*RH + 0.00085282*T_F*RH*RH - 0.00000199*T_F*T_F*RH*RH;
+        return (HI_F - 32) * 5/9;
+      }
+      function windChillC(T, V){
+        // Canadian wind chill (°C, V in km/h)
+        if (V <= 4.8 || T > 10) return T;
+        return 13.12 + 0.6215*T - 11.37*Math.pow(V,0.16) + 0.3965*T*Math.pow(V,0.16);
+      }
+      const feel = temp.map((T,i)=>{
+        const RHv = rh[i]; const V = wind[i];
+        if (T === null || T === undefined) return null;
+        if (T >= 26 && RHv !== null && RHv !== undefined) return heatIndexC(T, RHv);
+        if (T <= 10 && V !== null && V !== undefined) return windChillC(T, V);
+        return T;
+      });
+      const feelData = [
+        {x: times, y: temp, type: 'scatter', mode: 'lines', name: 'Temp (°C)', line:{color:'#ff6b6b'}},
+        {x: times, y: feel, type: 'scatter', mode: 'lines', name: 'Feels-like (°C)', line:{color:'#f6ad55'}}
+      ];
+      const feelLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#e8eef9'}, height: 320,
+        margin: {l:40, r:20, t:10, b:40},
+        xaxis: {title: 'Time', tickangle: -30, gridcolor:'#1f2d4a', automargin: true},
+        yaxis: {title: '°C', gridcolor:'#1f2d4a', automargin: true}
+      };
+      Plotly.newPlot('chart_feel_hr', feelData, feelLayout, {displayModeBar:false, responsive:true});
+
+      // Cumulative precipitation
+      const cum = []; let s=0; for (let i=0;i<precip.length;i++){ s += (precip[i]||0); cum.push(s); }
+      const cumData = [
+        {x: times, y: precip, type: 'bar', name: 'Precip (mm)', marker:{color:'#a1ffce'}},
+        {x: times, y: cum, type: 'scatter', mode: 'lines', name: 'Cumulative (mm)', line:{color:'#2bd4a5'}}
+      ];
+      const cumLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#e8eef9'}, height: 320,
+        margin: {l:40, r:20, t:10, b:40},
+        xaxis: {title: 'Time', tickangle: -30, gridcolor:'#1f2d4a', automargin: true},
+        yaxis: {title: 'Precip (mm)', gridcolor:'#1f2d4a', automargin: true}
+      };
+      Plotly.newPlot('chart_cumprec_hr', cumData, cumLayout, {displayModeBar:false, responsive:true});
+
+      // Pressure tendency (diff) vs wind
+      const pt = pressure.map((p,i)=> i===0 ? null : (p!==null && pressure[i-1]!==null ? p - pressure[i-1] : null));
+      const ptData = [
+        {x: times, y: pt, type: 'scatter', mode: 'lines', name: 'Pressure Δ (hPa)', line:{color:'#ffd166'}},
+        {x: times, y: wind, type: 'scatter', mode: 'lines', name: 'Wind (km/h)', yaxis:'y2', line:{color:'#b9ccf0'}}
+      ];
+      const ptLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#e8eef9'}, height: 320,
+        margin: {l:40, r:40, t:10, b:40},
+        xaxis: {title: 'Time', tickangle: -30, gridcolor:'#1f2d4a', automargin: true},
+        yaxis: {title: 'Δ hPa', gridcolor:'#1f2d4a', automargin: true},
+        yaxis2: {title: 'Wind (km/h)', overlaying: 'y', side: 'right'}
+      };
+      Plotly.newPlot('chart_ptend_hr', ptData, ptLayout, {displayModeBar:false, responsive:true});
+
+      // RH vs Temp scatter
+      const rhtData = [
+        {x: temp, y: rh, mode:'markers', type:'scatter', name:'RH vs Temp', marker:{color:'#63b3ed', size:4}}
+      ];
+      const rhtLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#e8eef9'}, height: 320,
+        margin: {l:50, r:20, t:10, b:40},
+        xaxis: {title: 'Temp (°C)', gridcolor:'#1f2d4a', automargin: true},
+        yaxis: {title: 'RH (%)', gridcolor:'#1f2d4a', automargin: true}
+      };
+      Plotly.newPlot('chart_rhtemp_hr', rhtData, rhtLayout, {displayModeBar:false, responsive:true});
     });
   </script>
 {% endif %}

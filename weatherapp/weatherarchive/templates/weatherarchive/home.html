@@ -12,7 +12,7 @@
 <section class="grid" style="margin-top:16px">
   <div class="card pad">
     <h2 style="margin-top:0">Daily Explorer</h2>
-    <p class="muted">Fetch up to a 92-day range. View tmax, tmin, tmean, humidity, precipitation, and wind with stats and anomaly markers.</p>
+    <p class="muted">Fetch any date range available. View tmax, tmin, tmean, humidity, precipitation, and wind with stats and anomaly markers.</p>
   </div>
   <div class="card pad">
     <h2 style="margin-top:0">Hourly Explorer</h2>
@@ -20,32 +20,16 @@
   </div>
 </section>
 <section class="card pad" style="margin-top:16px">
-  <h2 style="margin-top:0">What users say</h2>
-  <p class="muted" style="margin-bottom:10px">Real feedback from researchers and weather enthusiasts.</p>
-  <div class="grid">
-    <div class="card pad">
-      <strong>Ava K.</strong>
-      <p class="muted" style="margin:6px 0 0 0">“Clean interface and fast results.”</p>
-    </div>
-    <div class="card pad">
-      <strong>Owen M.</strong>
-      <p class="muted" style="margin:6px 0 0 0">“Hourly breakdowns are super helpful.”</p>
-    </div>
-  </div>
-  <div class="actions" style="margin-top:10px">
-    <a class="btn secondary" href="{% url 'weatherarchive:testimonials' %}">Read more testimonials</a>
-  </div>
-</section>
-<section class="card pad" style="margin-top:16px">
   <h2 style="margin-top:0">Quick Map</h2>
   <p class="muted">Search a place or click on the map to pick a location. Then jump to Daily or Hourly explorers.</p>
-  <div class="row full" style="margin-bottom:10px">
+  <form id="locationSearchForm" class="row full" style="margin-bottom:10px" autocomplete="off" onsubmit="return false;">
+    <label for="searchBox" class="visually-hidden">Location search</label>
     <input id="searchBox" type="text" placeholder="Search city or place name..." />
     <div class="actions" style="margin-top:10px">
       <button class="btn" id="btnDaily" disabled>Explore Daily</button>
       <button class="btn secondary" id="btnHourly" disabled>Explore Hourly</button>
     </div>
-  </div>
+  </form>
   <div id="map" style="width:100%;height:420px;border-radius:12px;overflow:hidden;border:1px solid #1f2d4a"></div>
   <div id="selInfo" class="muted" style="margin-top:8px">No location selected.</div>
 </section>
@@ -83,49 +67,108 @@
 
     // Simple geocode via Open-Meteo Geocoding API
     const sb = document.getElementById('searchBox');
+    const form = document.getElementById('locationSearchForm');
     // Autosuggest on input
     const dl = document.createElement('datalist');
     dl.id = 'home-suggestions';
     sb.setAttribute('list','home-suggestions');
     sb.parentElement.appendChild(dl);
     let ctrl = null; let lastQ=''; let deb=null;
+    let lastResults = [];
     function suggest(q){
-      if (!q || q.length<2){ dl.innerHTML=''; return; }
+      if (!q || q.length<2){ dl.innerHTML=''; lastResults = []; return; }
       if (q===lastQ) return; lastQ=q;
       if (ctrl) ctrl.abort(); ctrl = new AbortController();
       const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5`;
       fetch(url, {signal: ctrl.signal})
         .then(r=>r.json()).then(j=>{
           const res = (j && j.results) || [];
+          lastResults = res;
           dl.innerHTML = res.map(r=>{
             const name = `${r.name}, ${r.admin1 ? r.admin1 + ', ' : ''}${r.country_code || ''}`.replace(/,\s*$/, '');
             return `<option value="${name}"></option>`;
           }).join('');
-        }).catch(()=>{});
+        }).catch(()=>{ lastResults = []; });
     }
     sb.addEventListener('input', ()=>{ clearTimeout(deb); deb=setTimeout(()=>suggest(sb.value.trim()), 250); });
-
-    sb.addEventListener('keydown', async (ev)=>{
-      if (ev.key !== 'Enter') return;
-      ev.preventDefault();
+    sb.addEventListener('change', ()=>{
+      // If user picks a suggestion, update map immediately
       const q = sb.value.trim();
       if (!q) return;
-      try{
-        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1`;
-        const r = await fetch(url, {mode:'cors'});
-        const j = await r.json();
-        const res = (j && j.results && j.results[0]) || null;
-        if (!res){
-          info.textContent = 'No results found.';
-          return;
+      let match = null;
+      for (const r of lastResults) {
+        const name = `${r.name}, ${r.admin1 ? r.admin1 + ', ' : ''}${r.country_code || ''}`.replace(/,\s*$/, '');
+        if (name.toLowerCase() === q.toLowerCase()) {
+          match = r;
+          break;
         }
-        const name = `${res.name}, ${res.country_code || ''}`.replace(/,\s*$/, '');
-        const lat = res.latitude; const lon = res.longitude;
-        map.setView([lat, lon], 10);
-        setSelection(name, lat, lon);
-      }catch(err){
-        info.textContent = 'Search failed. Please try again.';
       }
+      if (match) {
+        const name = `${match.name}, ${match.country_code || ''}`.replace(/,\s*$/, '');
+        const lat = match.latitude; const lon = match.longitude;
+        map.setView([lat, lon], 10);
+        if (marker) marker.remove();
+        marker = L.marker([lat, lon]).addTo(map);
+        info.textContent = `${name} (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+        setSelection(name, lat, lon);
+      }
+    });
+    form.addEventListener('submit', function(ev){
+      ev.preventDefault();
+      const q = sb.value.trim();
+      if (!q) {
+        info.textContent = 'Please enter a location.';
+        return;
+      }
+      // Try to match input to lastResults
+      let match = null;
+      for (const r of lastResults) {
+        const name = `${r.name}, ${r.admin1 ? r.admin1 + ', ' : ''}${r.country_code || ''}`.replace(/,\s*$/, '');
+        if (name.toLowerCase() === q.toLowerCase()) {
+          match = r;
+          break;
+        }
+      }
+      if (match) {
+        const name = `${match.name}, ${match.country_code || ''}`.replace(/,\s*$/, '');
+        const lat = match.latitude; const lon = match.longitude;
+        map.setView([lat, lon], 10);
+        if (marker) marker.remove();
+        marker = L.marker([lat, lon]).addTo(map);
+        info.textContent = `${name} (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+        setSelection(name, lat, lon);
+        sb.value = '';
+        return;
+      }
+      info.textContent = 'Searching...';
+      (async function(){
+        try{
+          const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5`;
+          const r = await fetch(url, {mode:'cors'});
+          const j = await r.json();
+          const results = (j && j.results) || [];
+          if (results.length === 0){
+            info.textContent = 'No results found. Please check for typos or try a nearby city.';
+            return;
+          }
+          const res = results[0];
+          const name = `${res.name}, ${res.country_code || ''}`.replace(/,\s*$/, '');
+          const lat = res.latitude; const lon = res.longitude;
+          map.setView([lat, lon], 10);
+          if (marker) marker.remove();
+          marker = L.marker([lat, lon]).addTo(map);
+          info.textContent = `${name} (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+          setSelection(name, lat, lon);
+          sb.value = '';
+          dl.innerHTML = results.map(r => {
+            const n = `${r.name}, ${r.admin1 ? r.admin1 + ', ' : ''}${r.country_code || ''}`.replace(/,\s*$/, '');
+            return `<option value="${n}"></option>`;
+          }).join('');
+          lastResults = results;
+        }catch(err){
+          info.textContent = 'Search failed. Please check your connection and try again.';
+        }
+      })();
     });
 
     function goto(path){
@@ -143,4 +186,40 @@
     btnHourly.addEventListener('click', ()=> goto("{% url 'weatherarchive:hourly_data' %}"));
   });
 </script>
+<section class="card pad" style="margin-top:16px">
+  <h2 style="margin-top:0">What users say</h2>
+  {% if testimonial_count > 0 %}
+    <div style="margin-bottom:10px">
+      <span class="muted">Average rating:</span>
+      <span style="color:#ffe66d;font-size:18px">
+        {% for i in "12345" %}
+          {% if avg_rating and forloop.counter <= avg_rating %}★{% else %}☆{% endif %}
+        {% endfor %}
+      </span>
+      <span class="muted">({{ avg_rating }}/5 from {{ testimonial_count }} reviews)</span>
+    </div>
+    <div class="grid">
+      {% for t in testimonials %}
+        <div class="card pad">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="logo" aria-hidden="true" style="width:24px;height:24px"></div>
+            <div><strong>{{ t.name }}</strong>{% if t.role %}<div class="muted" style="font-size:12px">{{ t.role }}</div>{% endif %}</div>
+            <div class="muted" style="margin-left:auto;font-size:12px">{{ t.created_at|date:'Y-m-d' }}</div>
+          </div>
+          <div style="margin-top:10px">{{ t.message }}</div>
+          <div style="margin-top:8px;color:#ffe66d">
+            {% for i in "12345" %}
+              {% if forloop.counter <= t.rating %}★{% else %}☆{% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">No testimonials yet. Be the first to share your experience!</p>
+  {% endif %}
+  <div class="actions" style="margin-top:10px">
+    <a class="btn secondary" href="{% url 'weatherarchive:testimonials' %}">Read more testimonials</a>
+  </div>
+</section>
 {% endblock %}

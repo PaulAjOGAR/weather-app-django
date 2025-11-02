@@ -56,10 +56,7 @@ class WeatherDailyForm(forms.Form):
                 self.add_error("start_date", "Start date cannot be earlier than 1940-01-01.")
             if start_date > end_date:
                 self.add_error("end_date", "End date must be after start date.")
-            else:
-                # Max 92-day window per app requirements
-                if (end_date - start_date) > _td(days=92):
-                    self.add_error("end_date", "The selected date range must not exceed 92 days.")
+            # No maximum range limit enforced
 
         return cleaned_data
 

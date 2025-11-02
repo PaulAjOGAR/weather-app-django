@@ -55,7 +55,7 @@ This project targets Windows paths in examples, but it works on macOS/Linux too 
 - If you see an import/URL error: ensure you are using the updated URLs (`/` for form+results, `/download/` for CSV) and that the app is installed.
 - If API calls fail: ensure you have internet access; the app uses Open-Meteo public APIs (no key required). Temporary external failures will surface as user-visible errors.
 - Date validation: Start date must be on or before the end date; adjust the dates if you see validation errors.
-- Range limit: The date range is limited to 92 days to match the original Streamlit app’s constraint.
+- Range: No enforced maximum date range. Very large spans may take longer to load and depend on Open‑Meteo data availability.
 - Timezone: The API uses `timezone=auto` for results.
 
 ## Development Commands (reference)
@@ -108,3 +108,15 @@ Notes:
 
 ## License
 This repository did not include a license. Add one if you plan to distribute it.
+
+## Chart selection settings
+
+Both Daily and Hourly result pages now include a lightweight "Charts to display" toolbar above the plots. You can toggle each chart on or off using checkboxes. Your choices are remembered in your browser (localStorage) so that future queries keep your preferred layout.
+
+- Daily options: Temperature, Precipitation & Wind (with cumulative precipitation), RH & UV Index, Wind Compare, Temp Range Band, and Dew Point vs Temp.
+- Hourly options: Temperature & RH, Precipitation & Wind, Cloud & Pressure, Feels-like vs Temp, Cumulative Precip, and Pressure Tendency & Wind.
+
+Notes:
+- All charts are enabled by default.
+- Toggling only affects visibility; all plots are rendered once for performance and then shown/hidden instantly.
+- Preferences are stored per page (daily vs hourly) and per browser.
